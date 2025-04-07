@@ -1,6 +1,8 @@
 import socket
+import argparse
 
 HELLO_RESPONSE = "Hello from backend server!"
+HEALTH_CHECK_RESPONSE = "OK"
 
 class BackendServer:
 
@@ -21,22 +23,54 @@ class BackendServer:
     print(f"Connection closed by client.")
   
   def handle_request(self, client_socket: socket.socket):
-    request = client_socket.recv(1024).decode()
-    print(f"Received request:\n{request}")
+    try:
+      request = client_socket.recv(1024).decode()
+      print(f"Received request:\n{request}")
 
-    response = (
-      f"HTTP/1.1 200 OK\r\n"
-      f"Content-Type: text/plain\r\n"
-      f"Content-Length: {len(HELLO_RESPONSE)}\r\n"
-      f"\r\n"
-      f"{HELLO_RESPONSE}"
-    )
+      # Parse the HTTP request to determine the requested path
+      request_line = request.splitlines()[0]
+      method, path, _ = request_line.split()
+      print(f"Method: {method}, Path: {path}")
 
-    client_socket.sendall(response.encode())
-    client_socket.close()
+      if method == "GET" and path == "/health/":
+        response = (
+          f"HTTP/1.1 200 OK\r\n"
+          f"Content-Type: text/plain\r\n"
+          f"Content-Length: {len(HEALTH_CHECK_RESPONSE)}\r\n"
+          f"\r\n"
+          f"{HEALTH_CHECK_RESPONSE}"
+        )
+      elif method == "GET" and path == "/":
+        response = (
+          f"HTTP/1.1 200 OK\r\n"
+          f"Content-Type: text/plain\r\n"
+          f"Content-Length: {len(HELLO_RESPONSE)}\r\n"
+          f"\r\n"
+          f"{HELLO_RESPONSE}"
+        )
+      else:
+        response = (
+          f"HTTP/1.1 404 Not Found\r\n"
+          f"Content-Type: text/plain\r\n"
+          f"Content-Length: 13\r\n"
+          f"\r\n"
+          f"404 Not Found"
+        )
+        print(f"Unknown request path: {path}")
+      
+      # Send the response back to the client
+      client_socket.sendall(response.encode())
+    except Exception as e:
+      print(f"Error processing request: {e}")
+    finally:
+      client_socket.close()
 
 
 if __name__ == "__main__":
+  # Parse command-line arguments
+  parser = argparse.ArgumentParser(description="Start a backend server.")
+  parser.add_argument("--port", type=int, default=5050, help="Port to listen on (default: 5050)")
+  args = parser.parse_args()
 
-  server = BackendServer()
+  server = BackendServer(port=args.port)
   server.start()

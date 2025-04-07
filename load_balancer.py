@@ -2,6 +2,13 @@ import socket
 from typing import List
 from concurrent.futures import ThreadPoolExecutor
 from algorithms.round_robin import RoundRobin
+from health.health import HealthCheckManager
+import logging
+
+logging.basicConfig(
+  level=logging.INFO, 
+  format='%(asctime)s - %(levelname)s - %(message)s'
+)
 
 class LoadBalancer:
 
@@ -13,8 +20,17 @@ class LoadBalancer:
     self.backends = backend_servers
     self.algorithm = algorithm or RoundRobin(self.backends)
     self.executor = ThreadPoolExecutor(max_workers=max_workers)
+    self.health_checker = HealthCheckManager(self.backends)
+    self.running = True
 
   def start(self):
+    """
+    Start the load balancer and its health check manager.
+    """
+    health_check_thread = ThreadPoolExecutor(max_workers=1)
+    health_check_thread.submit(self.health_checker.start_health_checks)
+    logging.info("Health checks started successfully.")
+
     addr = (self.host, self.port)
     with socket.socket() as s:
       s.bind(addr)
@@ -26,6 +42,15 @@ class LoadBalancer:
         # Submit the request to the executor thread pool for handling
         self.executor.submit(self.handle_request, client_socket)
     print(f"Connection closed by client.")
+  
+  def stop(self):
+    """
+    Stop the load balancer and its health check manager.
+    """
+    self.running = False
+    self.health_checker.stop()
+    self.executor.shutdown(wait=True)
+    logging.info("Load balancer stopped.")
   
   def handle_request(self, client_socket: socket.socket):
     try:
@@ -64,4 +89,9 @@ class LoadBalancer:
 if __name__ == "__main__":
 
   load_balancer = LoadBalancer(max_workers=10)
-  load_balancer.start()
+  try:
+    load_balancer.start()
+  except KeyboardInterrupt:
+    logging.info("Stopping load balancer...")
+    load_balancer.stop()
+    logging.info("Load balancer stopped.")
