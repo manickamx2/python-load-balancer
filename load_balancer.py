@@ -35,13 +35,12 @@ class LoadBalancer:
     with socket.socket() as s:
       s.bind(addr)
       s.listen()
-      print(f"Load balancer listening on {self.host}:{self.port}")
+      logging.info(f"Load balancer listening on {self.host}:{self.port}")
       while True:
         client_socket, address = s.accept()
-        print(f"Received request from {address}")
+        logging.info(f"Received request from {address}")
         # Submit the request to the executor thread pool for handling
         self.executor.submit(self.handle_request, client_socket)
-    print(f"Connection closed by client.")
   
   def stop(self):
     """
@@ -54,13 +53,18 @@ class LoadBalancer:
   
   def handle_request(self, client_socket: socket.socket):
     try:
+      healthy_backends = self.health_checker.get_healthy_backends()
+      if not healthy_backends:
+        logging.error("No healthy backends available")
+        client_socket.sendall(b"HTTP/1.1 503 Service Unavailable\r\n\r\n")
+        client_socket.close()
+        return
       backend = self.algorithm.get_next_server()
       self.forward_request(client_socket, backend)
     except Exception as e:
-      print(f"Error handling client request: {e}")
+      logging.error(f"Error handling client request: {e}")
     finally:
       client_socket.close()
-      print(f"Client socket closed.")
   
   def forward_request(self, client_socket: socket.socket, backend_addr: tuple):
     with socket.socket() as backend_socket:
