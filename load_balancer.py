@@ -71,15 +71,15 @@ class LoadBalancer:
       backend_socket.connect(backend_addr)
       request = client_socket.recv(2048)
       if not request:
-        print(f"Did not receive a valid request")
+        logging.error(f"Did not receive a valid request: {request}")
         return
-      print(f"{request.decode()}")
+      logging.info(f"{request.decode()}")
       
       backend_socket.sendall(request)
       response = backend_socket.recv(2048)
 
       status = self.parse_response(response.decode())[0]
-      print(f"Response from server: {status}")
+      logging.info(f"Response from server: {status}")
     
       client_socket.sendall(response)
       client_socket.close()
